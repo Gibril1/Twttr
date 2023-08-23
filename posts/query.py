@@ -1,7 +1,7 @@
 import graphene
 from graphql import GraphQLError
-from .schema import PostType, LikeType
-from .models import Post, Like
+from .schema import PostType, LikeType, CommentType
+from .models import Post, Like, Comment
 
 class Query(graphene.ObjectType):
     posts = graphene.List(PostType)
@@ -18,13 +18,32 @@ class CreatePost(graphene.Mutation):
         tweet = graphene.String(required=True)
     
     ok = graphene.Boolean()
-    post = graphene.Field(PostType)
+    comment = graphene.Field(CommentType)
     
     def mutate(self, info, tweet):
         if not info.context.user.is_anonymous:
-            new_post = Post(post=tweet, created_by=info.context.user)
+            new_post = Comment(post=tweet, created_by=info.context.user)
             new_post.save()
             return CreatePost(ok=True, post=new_post)
+        raise GraphQLError('You are not authenticated. Log in')
+    
+class CreateComment(graphene.Mutation):
+    class Arguments:
+        comment = graphene.String(required=True)
+        post_id = graphene.Int(required=True)
+    
+    ok = graphene.Boolean()
+    comment = graphene.Field(CommentType)
+    
+    def mutate(self, info, post_id, comment):
+        try:
+            post = Post.objects.get(id=post_id)
+        except Post.DoesNotExist:
+            raise GraphQLError('This post does not exist')
+        if not info.context.user.is_anonymous:
+            new_comment = Comment(comment=comment, created_by=info.context.user, post=post)
+            new_comment.save()
+            return CreateComment(ok=True, comment=new_comment)
         raise GraphQLError('You are not authenticated. Log in')
 
 class CreateLike(graphene.Mutation):
@@ -52,7 +71,7 @@ class UnLike(graphene.Mutation):
         like = graphene.Int(required=True)
 
     ok = graphene.Boolean()
-    
+    message = graphene.String()
 
     def mutate(self, info, like):
         try:
@@ -63,24 +82,40 @@ class UnLike(graphene.Mutation):
         if not info.context.user.is_anonymous:
             if liked.liked_by != info.context.user:
                 liked.unlike()
-                return UnLike(ok=True)
+                return UnLike(ok=True, message='You have unliked this post')
             raise GraphQLError('You are not authorised')
         raise GraphQLError('You are not authenticated')
     
 class UpdatePost(graphene.Mutation):
     class Arguments:
         id = graphene.Int(required=True)
-        tweet = graphene.String(required=True)
+        post = graphene.String(required=True)
     
     ok = graphene.Boolean()
     post = graphene.Field(PostType)
     
-    def mutate(self, info, id, tweet):
+    def mutate(self, info, id, post):
         updated_post = Post.objects.get(id=id)
         if updated_post.created_by != info.context.user:
-            updated_post.post = tweet
+            updated_post.post = post
             updated_post.save()
             return UpdatePost(ok=True, post=updated_post)
+        raise GraphQLError('You are not authorised')
+    
+class UpdateComment(graphene.Mutation):
+    class Arguments:
+        id = graphene.Int(required=True)
+        comment = graphene.String(required=True)
+    
+    ok = graphene.Boolean()
+    comment = graphene.Field(CommentType)
+    
+    def mutate(self, info, id, comment):
+        updated_comment = Comment.objects.get(id=id)
+        if updated_comment.created_by != info.context.user:
+            updated_comment.comment = comment
+            updated_comment.save()
+            return UpdateComment(ok=True, comment=updated_comment)
         raise GraphQLError('You are not authorised')
         
     
@@ -92,11 +127,32 @@ class DeletePost(graphene.Mutation):
     post = graphene.Field(PostType)
     
     def mutate(self, info, id):
-        if updated_post.created_by != info.context.user:
-            updated_post = Post.objects.get(id=id)
-            updated_post.delete()
-            return DeletePost(ok=True, post=updated_post)
+        try:
+            post = Post.objects.get(id=id)
+        except Post.DoesNotExist:
+            raise GraphQLError('Post does not exist')
+        if post.created_by != info.context.user:
+            post.delete()
+            return DeletePost(ok=True, post=post)
         raise GraphQLError('You are not authorised')
+    
+class DeleteComment(graphene.Mutation):
+    class Arguments:
+        id = graphene.Int(required=True)
+    
+    ok = graphene.Boolean()
+    comment = graphene.Field(CommentType)
+    
+    def mutate(self, info, id):
+        try:
+            comment = Comment.objects.get(id=id)
+        except Comment.DoesNotExist:
+            raise GraphQLError('Comment does not exist')
+        if comment.created_by != info.context.user:
+            comment.delete()
+            return DeleteComment(ok=True, comment=comment)
+        raise GraphQLError('You are not authorised')
+    
         
     
 
