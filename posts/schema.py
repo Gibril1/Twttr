@@ -10,17 +10,13 @@ class PostType(DjangoObjectType):
 
     class Meta:
         model = Post
-        fields = ("id", "post", "created_at", "updated_at", "like_count")
+        fields = ("id", "post", "created_at", "updated_at", "like_count", "created_by")
 
 class CommentType(DjangoObjectType):
-    like_count = graphene.Int()
-
-    def resolve_like_count(self, info):
-        return self.like_count()
 
     class Meta:
         model = Comment
-        fields = ("id", "comment", "created_at", "updated_at", "like_count")
+        fields = ("id", "comment", "created_at", "updated_at", "comment_by")
 
 
 class LikeType(DjangoObjectType):

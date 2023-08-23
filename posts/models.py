@@ -29,7 +29,8 @@ class Like(models.Model):
     
     
     def __str__(self) -> str:
-        return self.post.post    
+        return self.post.post  
+      
     class Meta:
         unique_together = ('liked_by', 'post')
 
@@ -43,8 +44,8 @@ class Comment(models.Model):
     class Meta:
         ordering = ('-created_at',)
     
-    def like_count(self):
-        return Like.objects.filter(comment=self).count()
+    # def like_count(self):
+    #     return Like.objects.filter(comment=self).count()
 
     
     def __str__(self) -> str:
