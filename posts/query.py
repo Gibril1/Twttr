@@ -1,7 +1,7 @@
 import graphene
 from graphql import GraphQLError
-from .schema import PostType
-from .models import Post
+from .schema import PostType, LikeType
+from .models import Post, Like
 
 class Query(graphene.ObjectType):
     posts = graphene.List(PostType)
@@ -26,6 +26,46 @@ class CreatePost(graphene.Mutation):
             new_post.save()
             return CreatePost(ok=True, post=new_post)
         raise GraphQLError('You are not authenticated. Log in')
+
+class CreateLike(graphene.Mutation):
+    class Arguments:
+        post = graphene.Int(required=True)
+
+    ok = graphene.Boolean()
+    like = graphene.Field(LikeType)
+
+    def mutate(self, info, post):
+        try:
+            liked_post = Post.objects.get(id=post)
+        except Post.DoesNotExist:
+            raise GraphQLError('Such post does not exist')
+        
+        if not info.context.user.is_anonymous:
+            if not Like.objects.filter(liked_by=info.context.user,post=liked_post).exists():
+                new_like = Like(liked_by=info.context.user, post=liked_post)
+                new_like.save()
+                return CreateLike(ok=True, like=new_like)
+        raise GraphQLError('You are not authenticated')
+    
+class UnLike(graphene.Mutation):
+    class Arguments:
+        like = graphene.Int(required=True)
+
+    ok = graphene.Boolean()
+    
+
+    def mutate(self, info, like):
+        try:
+            liked = Like.objects.get(id=like)
+        except Like.DoesNotExist:
+            raise GraphQLError('You have not liked such post')
+        
+        if not info.context.user.is_anonymous:
+            if liked.liked_by != info.context.user:
+                liked.unlike()
+                return UnLike(ok=True)
+            raise GraphQLError('You are not authorised')
+        raise GraphQLError('You are not authenticated')
     
 class UpdatePost(graphene.Mutation):
     class Arguments:
@@ -64,6 +104,8 @@ class Mutation(graphene.ObjectType):
     create_post = CreatePost.Field()
     update_post = UpdatePost.Field()
     delete_post = DeletePost.Field()
+    like_post = CreateLike.Field()
+    unlike_post = UnLike.Field()
     
 
 schema = graphene.Schema(query=Query, mutation=Mutation)
