@@ -21,9 +21,11 @@ class CreatePost(graphene.Mutation):
     post = graphene.Field(PostType)
     
     def mutate(self, info, tweet):
-        new_post = Post(post=tweet)
-        new_post.save()
-        return CreatePost(ok=True, post=new_post)
+        if not info.context.user.is_anonymous:
+            new_post = Post(post=tweet, created_by=info.context.user)
+            new_post.save()
+            return CreatePost(ok=True, post=new_post)
+        raise GraphQLError('You are not authenticated. Log in')
     
 class UpdatePost(graphene.Mutation):
     class Arguments:
@@ -35,9 +37,12 @@ class UpdatePost(graphene.Mutation):
     
     def mutate(self, info, id, tweet):
         updated_post = Post.objects.get(id=id)
-        updated_post.post = tweet
-        updated_post.save()
-        return UpdatePost(ok=True, post=updated_post)
+        if updated_post.created_by != info.context.user:
+            updated_post.post = tweet
+            updated_post.save()
+            return UpdatePost(ok=True, post=updated_post)
+        raise GraphQLError('You are not authorised')
+        
     
 class DeletePost(graphene.Mutation):
     class Arguments:
@@ -47,9 +52,12 @@ class DeletePost(graphene.Mutation):
     post = graphene.Field(PostType)
     
     def mutate(self, info, id):
-        updated_post = Post.objects.get(id=id)
-        updated_post.delete()
-        return DeletePost(ok=True, post=updated_post)
+        if updated_post.created_by != info.context.user:
+            updated_post = Post.objects.get(id=id)
+            updated_post.delete()
+            return DeletePost(ok=True, post=updated_post)
+        raise GraphQLError('You are not authorised')
+        
     
 
 class Mutation(graphene.ObjectType):
