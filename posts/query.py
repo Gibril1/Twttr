@@ -1,7 +1,7 @@
 import graphene
 from graphql import GraphQLError
-from .schema import PostType, LikeType, CommentType
-from .models import Post, Like, Comment
+from .schema import PostType, LikeType, CommentType, RepostType
+from .models import Post, Like, Comment, Repost
 
 class Query(graphene.ObjectType):
     # posts
@@ -11,8 +11,10 @@ class Query(graphene.ObjectType):
         return Post.objects.all()
 
     def resolve_post(self, info, id):
+        if info.context.user.is_anonymous:
+            raise GraphQLError('You are not authenticated. Log in')
         return Post.objects.get(id=id)
-    
+        
     # comments
     comments = graphene.List(CommentType)
     comment = graphene.Field(CommentType, id= graphene.Int()) 
@@ -21,6 +23,16 @@ class Query(graphene.ObjectType):
     
     def resolve_comment(self, info, id):
         return Comment.objects.get(id=id)
+    
+    # reposts
+    reposts = graphene.List(RepostType)
+    repost = graphene.Field(RepostType, id= graphene.Int())
+
+    def resolve_reposts(self, info, **kwargs):
+        return Repost.objects.all()
+    
+    def resolve_repost(self, info, id):
+        return Repost.objects.get(id=id)
     
 class CreatePost(graphene.Mutation):
     class Arguments:
@@ -100,6 +112,33 @@ class UnLike(graphene.Mutation):
         else:
             return GraphQLError('You have not liked such a post')
         return UnLike(ok=True, message='You have unliked the post')
+
+class CreateRepost(graphene.Mutation):
+    class Arguments:
+        post_id = graphene.Int(required=True)
+        comment = graphene.String()
+    
+    ok = graphene.Boolean()
+    repost = graphene.Field(RepostType)
+    message = graphene.String()
+    
+
+    def mutate(self, info, post_id, comment):
+        if info.context.user.is_anonymous:
+            raise GraphQLError('You are not authorised')
+        try:
+            post = Post.objects.get(id=post_id)
+        except Post.DoesNotExist:
+            raise GraphQLError('Such post does not exist')
+        
+        repost = Repost(
+            repost_by = info.context.user,
+            post = post,
+            comment = comment
+        )
+        repost.save()
+        return CreateRepost(ok=True, repost=repost, message='You have successfully reposted this post!')
+        
     
 class UpdatePost(graphene.Mutation):
     class Arguments:
@@ -174,8 +213,26 @@ class DeleteComment(graphene.Mutation):
             return DeleteComment(ok=True, comment=comment)
         raise GraphQLError('You are not authorised')
     
-        
-    
+
+class DeleteRepost(graphene.Mutation):
+    class Arguments:
+        id = graphene.Int(required=True)
+
+    ok = graphene.Boolean()
+    message = graphene.String()
+
+    def mutate(self, info, id):
+        if info.context.user.is_anonymous:
+            raise GraphQLError('You are not authenticated. Log in')
+        try:
+            repost = Repost.objects.get(id=id)
+        except Repost.DoesNotExist:
+            raise GraphQLError('Repost does not exist')
+
+        if repost.repost_by == info.context.user:
+            repost.delete()
+            return DeleteRepost(ok=True, message='Repost has been deleted') 
+        raise GraphQLError('You are not authorized to delete this')
 
 class Mutation(graphene.ObjectType):
     create_post = CreatePost.Field()
@@ -186,6 +243,8 @@ class Mutation(graphene.ObjectType):
     create_comment = CreateComment.Field()
     update_comment = UpdateComment.Field()
     delete_comment = DeleteComment.Field()
+    repost = CreateRepost.Field()
+    delete_repost = DeleteRepost.Field()
     
 
 schema = graphene.Schema(query=Query, mutation=Mutation)

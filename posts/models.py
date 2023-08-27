@@ -1,5 +1,8 @@
 from django.db import models
-from django.contrib.auth.models import User
+from django.contrib.auth import get_user_model
+
+User = get_user_model()
+
 
 # Create your models here.
 class Post(models.Model):
@@ -16,6 +19,14 @@ class Post(models.Model):
     
     def like_count(self):
         return Like.objects.filter(post=self).count()
+    
+    def comment_count(self):
+        return Comment.objects.filter(post=self).count()
+    
+    def repost_count(self):
+        return Repost.objects.filter(post=self).count()
+    
+
 
     
 class Like(models.Model):
@@ -44,9 +55,18 @@ class Comment(models.Model):
     class Meta:
         ordering = ('-created_at',)
     
-    # def like_count(self):
-    #     return Like.objects.filter(comment=self).count()
+    def __str__(self) -> str:
+        return self.comment
+    
+class Repost(models.Model):
+    repost_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
+    post = models.ForeignKey(Post, on_delete=models.CASCADE)
+    comment = models.TextField(null=True)
+    created_at = models.DateTimeField(auto_now=True)
+    updated_at = models.DateTimeField(auto_now_add=True)
 
+    class Meta:
+        ordering = ('-created_at',)
     
     def __str__(self) -> str:
         return self.comment
