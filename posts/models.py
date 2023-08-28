@@ -3,10 +3,10 @@ from django.contrib.auth import get_user_model
 
 User = get_user_model()
 
-
 # Create your models here.
 class Post(models.Model):
     post = models.TextField(null=False)
+    media = models.ImageField(upload_to='images', null=True) # image
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
     created_at = models.DateTimeField(auto_now=True)
     updated_at = models.DateTimeField(auto_now_add=True)
@@ -23,8 +23,14 @@ class Post(models.Model):
     def comment_count(self):
         return Comment.objects.filter(post=self).count()
     
+    def comments(self):
+        return Comment.objects.filter(post=self)
+    
     def repost_count(self):
         return Repost.objects.filter(post=self).count()
+    
+    def reposts(self):
+        return Repost.objects.filter(post=self)
     
 
 
@@ -70,4 +76,17 @@ class Repost(models.Model):
     
     def __str__(self) -> str:
         return self.comment
+
+class Notifications(models.Model):
+    message = models.TextField()
+    message_for = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
+    created_at = models.DateTimeField(auto_now=True)
+    updated_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ('-created_at',)
     
+
+    def __str__(self) -> str:
+        return self.message
+

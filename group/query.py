@@ -2,6 +2,7 @@ import graphene
 from graphql import GraphQLError
 from .schema import GroupType, GroupMembershipType
 from .models import GroupMembership, Group
+from posts.models import Notifications
 
 class Query(graphene.ObjectType):
     # groups
@@ -75,6 +76,11 @@ class JoinGroup(graphene.Mutation):
                 user=info.context.user,
                 status='Pending'
             )
+            notification = Notifications(
+                    message =f'You have requested to join {group.name}. Wait for admin approval',
+                    message_for = info.context.user
+                )
+            notification.save()
             membership.save()
             return JoinGroup(ok=True, group_membership=membership, message='You have joined this group. Wait for approval')
         if check_membership and check_membership.status == 'Pending':
@@ -117,6 +123,11 @@ class AssertGroupStatus(graphene.Mutation):
         # if status is accepted
         membership.status = status
         membership.save()
+        notification = Notifications(
+                    message = f'{info.context.user.username} accepted your request to join {membership.group.name}',
+                    message_for = membership.user
+                )
+        notification.save()
         return AssertGroupStatus(ok=True, membership=membership, message='You have accepted this membership')
         
 class RemoveMemberFromGroup(graphene.Mutation):

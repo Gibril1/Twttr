@@ -1,12 +1,14 @@
 import graphene
+from django.db.models import Q
 from graphql import GraphQLError
 from .schema import PostType, LikeType, CommentType, RepostType
-from .models import Post, Like, Comment, Repost
+from .models import Post, Like, Comment, Repost, Notifications
 
 class Query(graphene.ObjectType):
     # posts
     posts = graphene.List(PostType)
-    post = graphene.Field(PostType, id= graphene.Int()) 
+    post = graphene.Field(PostType, id= graphene.Int())
+    search_post = graphene.Field(PostType, search=graphene.String())
     def resolve_posts(self, info, **kwargs):
         return Post.objects.all()
 
@@ -14,6 +16,11 @@ class Query(graphene.ObjectType):
         if info.context.user.is_anonymous:
             raise GraphQLError('You are not authenticated. Log in')
         return Post.objects.get(id=id)
+    
+    def resolve_search_post(self, info, search=None):
+        if search:
+            filter = Q(post__icontains=search)
+            return Post.objects.filter(filter)
         
     # comments
     comments = graphene.List(CommentType)
@@ -37,6 +44,7 @@ class Query(graphene.ObjectType):
 class CreatePost(graphene.Mutation):
     class Arguments:
         tweet = graphene.String(required=True)
+        
     
     ok = graphene.Boolean()
     post = graphene.Field(PostType)
@@ -67,6 +75,11 @@ class CreateComment(graphene.Mutation):
         # Comment On A Post
         new_comment = Comment(comment=comment, comment_by=info.context.user, post=post)
         new_comment.save()
+        notification = Notifications(
+                    message = f'{info.context.user.username} commented on your post',
+                    message_for = post.created_by
+                )
+        notification.save()
         return CreateComment(ok=True, comment=new_comment)
         
 
@@ -87,6 +100,11 @@ class CreateLike(graphene.Mutation):
             if not Like.objects.filter(liked_by=info.context.user,post=liked_post).exists():
                 new_like = Like(liked_by=info.context.user, post=liked_post)
                 new_like.save()
+                notification = Notifications(
+                    message = f'{info.context.user.username} liked your post',
+                    message_for = liked_post.created_by
+                )
+                notification.save()
                 return CreateLike(ok=True, like=new_like)
             raise GraphQLError('You cannot like a single post twice')
         raise GraphQLError('You are not authenticated')
@@ -136,6 +154,11 @@ class CreateRepost(graphene.Mutation):
             post = post,
             comment = comment
         )
+        notification = Notifications(
+                    message = f'{info.context.user.username} shared your post',
+                    message_for = post.created_by
+                )
+        notification.save()
         repost.save()
         return CreateRepost(ok=True, repost=repost, message='You have successfully reposted this post!')
         
@@ -150,7 +173,7 @@ class UpdatePost(graphene.Mutation):
     
     def mutate(self, info, id, post):
         updated_post = Post.objects.get(id=id)
-        if updated_post.created_by == info.context.user.id:
+        if updated_post.created_by == info.context.user:
             updated_post.post = post
             updated_post.save()
             return UpdatePost(ok=True, post=updated_post)
@@ -172,7 +195,7 @@ class UpdateComment(graphene.Mutation):
         except Comment.DoesNotExist:
             raise GraphQLError('Such a comment does not exist')
         
-        if updated_comment.comment_by == info.context.user.id:
+        if updated_comment.comment_by == info.context.user:
             updated_comment.comment = comment
             updated_comment.save()
             return UpdateComment(ok=True, comment=updated_comment)
