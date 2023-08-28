@@ -3,6 +3,8 @@ import graphql_jwt
 from graphql import GraphQLError
 from .schema import UserType, FollowingType
 from .models import Following, User
+from posts.models import Post, Comment, Repost, Notifications
+from posts.schema import PostType, CommentType, RepostType, NotificationType
 
 class Query(graphene.ObjectType):
     # users
@@ -13,19 +15,53 @@ class Query(graphene.ObjectType):
         return User.objects.all()
     
     def resolve_me(self, info):
-        user = info.context.user
-        if user.is_anonymous:
+        if info.context.user.is_anonymous:
             raise GraphQLError('Not logged in!')
-        return user
+        return info.context.user
     
-    # following
-    followers = graphene.List(FollowingType)
-    
+    # following and following
+    followers = graphene.List(UserType)
+    following = graphene.List(UserType)
+
     def resolve_followers(self, info):
         if info.context.user.is_anonymous:
             raise GraphQLError('You are not authenticated')
-        return Following.objects.filter(following=info.context.user)
+        followers = Following.objects.filter(following=info.context.user)
+        return User.objects.filter(username__in=[follower.follower for follower in followers])
+    
+    def resolve_following(self, info):
+        if info.context.user.is_anonymous:
+            raise GraphQLError('You are not authenticated')
+        following_users = Following.objects.filter(follower=info.context.user)
+        return User.objects.filter(username__in=[follow.following for follow in following_users])
+    
+    # posts, reposts and comments the user has made
+    user_posts = graphene.List(PostType)
+    user_comments = graphene.List(CommentType)
+    user_reposts = graphene.List(RepostType)
 
+    def resolve_user_posts(self, info):
+        if info.context.user.is_anonymous:
+            raise GraphQLError('You are not authenticated')
+        return Post.objects.filter(created_by=info.context.user)
+    
+    def resolve_user_comments(self, info):
+        if info.context.user.is_anonymous:
+            raise GraphQLError('You are not authenticated')
+        return Comment.objects.filter(created_by=info.context.user)
+    
+    def resolve_user_reposts(self, info):
+        if info.context.user.is_anonymous:
+            raise GraphQLError('You are not authenticated')
+        return Repost.objects.filter(created_by=info.context.user)
+    
+    # notifications
+    notifications = graphene.List(NotificationType)
+    def resolve_notifications(self, info):
+        if info.context.user.is_anonymous:
+            raise GraphQLError('You are not authenticated')
+        return Notifications.objects.filter(message_for=info.context.user)
+    
 class RegisterUser(graphene.Mutation):
     class Arguments:
         username = graphene.String(required=True)
@@ -79,6 +115,11 @@ class FollowUser(graphene.Mutation):
             following = user
         )
         following_relationship.save()
+        notification = Notifications(
+                    message = f'{info.context.user.username} followed you!',
+                    message_for = user
+                )
+        notification.save()
         return FollowUser(ok=True, following=following_relationship, message='You have followed this user')
     
 class UnFollowUser(graphene.Mutation):
