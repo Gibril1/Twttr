@@ -3,7 +3,10 @@ from graphql import GraphQLError
 from .schema import GroupType, GroupMembershipType
 from .models import GroupMembership, Group
 from posts.models import Notifications
+from django.contrib.auth import get_user_model
+from accounts.schema import UserType
 
+User = get_user_model()
 class Query(graphene.ObjectType):
     # groups
     groups = graphene.List(GroupType)
@@ -26,6 +29,23 @@ class Query(graphene.ObjectType):
 
     def resolve_group_memberships(self, info, **kwargs):
         return GroupMembership.objects.all()
+    
+    # get members of a group
+    group_members = graphene.List(UserType, id= graphene.Int())
+
+    def resolve_group_members(self, info, id):
+        if info.context.user.is_anonymous:
+            raise GraphQLError('You are not authenticated. Log in')
+        try:
+            group = Group.objects.get(id=id)
+        except Group.DoesNotExist:
+            raise GraphQLError('Group does not exist')
+        
+        group_members = GroupMembership.objects.filter(group=group)
+        # return the details of the users
+        return User.objects.filter(id__in=[member.id for member in group_members])
+
+        
 
 
 class CreateGroup(graphene.Mutation):
