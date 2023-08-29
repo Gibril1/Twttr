@@ -7,13 +7,13 @@ from .models import Post, Like, Comment, Repost, Notifications
 class CommentType(DjangoObjectType):
     class Meta:
         model = Comment
-        fields = ("id", "comment", "created_at", "updated_at", "comment_by")
+        fields = ("id", "comment", "created_at", "updated_at", "comment_by", "post")
 
 
 class LikeType(DjangoObjectType):
     class Meta:
         model = Like
-        fields = ("liked_by", "post")
+        fields = ("id", "liked_by", "post")
 
 class RepostType(DjangoObjectType):
     class Meta:

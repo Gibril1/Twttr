@@ -8,7 +8,7 @@ class Query(graphene.ObjectType):
     # posts
     posts = graphene.List(PostType)
     post = graphene.Field(PostType, id= graphene.Int())
-    search_post = graphene.Field(PostType, search=graphene.String())
+    search_post = graphene.List(PostType, search=graphene.String())
     def resolve_posts(self, info, **kwargs):
         return Post.objects.all()
 
